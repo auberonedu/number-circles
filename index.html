@@ -12,20 +12,33 @@
       margin-left: auto;
       margin-right: auto;
     }
-    /* Row for the toggle circles */
-    .squares-row {
+    /* Container for the bit controls: plus on far left, then bit toggles, then minus on far right */
+    #bitControls {
       display: flex;
-      justify-content: space-evenly; /* Evenly space toggle circles */
+      align-items: center;
+      justify-content: center;
       margin-bottom: 20px;
     }
-    /* Each toggle plus its vertical column of value indicators */
+    .control-button {
+      width: 50px;
+      height: 50px;
+      font-size: 30px;
+      margin: 10px;
+      cursor: pointer;
+    }
+    /* Container for the bit toggles */
+    .squares-row {
+      display: flex;
+      justify-content: center;
+    }
+    /* Each bit column */
     .square-container {
       display: flex;
       flex-direction: column;
       align-items: center;
       margin: 0 10px;
     }
-    /* The toggle circle */
+    /* The bit toggle is a circle */
     .toggle {
       width: 60px;
       height: 60px;
@@ -35,36 +48,37 @@
       margin-bottom: 10px;
       box-sizing: border-box;
     }
-    /* When active, fill the toggle with black */
+    /* When active, the toggle is filled black */
     .toggle.active {
       background-color: black;
     }
-    /* Container for the value indicators, arranged in a vertical column */
+    /* Container for the value-indicator squares under each toggle.
+       Arranged as a grid that fills a column to 16 squares max before starting a new column. */
     .circles-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      display: grid;
+      grid-auto-flow: column;
+      grid-template-rows: repeat(16, 15px);
       gap: 4px;
+      justify-content: center;
     }
-    /* The small value indicators beneath each toggle are now squares */
+    /* The small indicator squares (default lightgrey, green if active) */
     .small-circle {
       width: 15px;
       height: 15px;
-      border-radius: 0;
       background-color: lightgrey;
     }
-    /* The result container is now arranged as a grid: no more than 8 squares in a row */
+    /* The result container: a grid with at most 16 squares per row */
     .result-container {
       margin-top: 30px;
       border: 2px dashed black;
       padding: 10px;
       display: grid;
-      grid-template-columns: repeat(8, 15px);
+      grid-template-columns: repeat(16, 15px);
       gap: 5px;
       justify-content: center;
       min-height: 30px;
     }
-    /* Each green counter square */
+    /* Each green result square */
     .result-square {
       width: 15px;
       height: 15px;
@@ -73,85 +87,115 @@
   </style>
 </head>
 <body>
-  <!-- Row of toggle circles arranged evenly -->
-  <div class="squares-row" id="squaresRow"></div>
-  <!-- Result container that holds green squares in a grid -->
+  <!-- Bit controls: plus button on the far left, then the bit toggles, then minus button on the far right -->
+  <div id="bitControls">
+    <button id="plusButton" class="control-button">+</button>
+    <div class="squares-row" id="squaresRow"></div>
+    <button id="minusButton" class="control-button">-</button>
+  </div>
+  <!-- Result container for output grid -->
   <div class="result-container" id="resultContainer"></div>
-  
+
   <script>
-    // Define the four toggle elements with their corresponding values.
-    // The leftmost element represents the highest value (8), and the rightmost the lowest (1).
-    const squaresData = [
-      { value: 8, active: false },
-      { value: 4, active: false },
-      { value: 2, active: false },
-      { value: 1, active: false }
-    ];
-    
+    // Global state for bit toggles: an array of booleans.
+    // The leftmost element is the most significant bit.
+    // Start with 4 bits by default.
+    let bitsState = [false, false, false, false];
+
     const squaresRow = document.getElementById('squaresRow');
     const resultContainer = document.getElementById('resultContainer');
-    
-    // Create a column group for each toggle and its value indicators.
-    squaresData.forEach((square, index) => {
-      const squareContainer = document.createElement('div');
-      squareContainer.className = 'square-container';
-      
-      // Create the toggle circle element.
-      const toggleDiv = document.createElement('div');
-      toggleDiv.className = 'toggle';
-      toggleDiv.dataset.index = index;
-      toggleDiv.addEventListener('click', toggleSquare);
-      
-      // Create a container for the value indicators, arranged in a vertical column.
-      const circlesContainer = document.createElement('div');
-      circlesContainer.className = 'circles-container';
-      
-      // Add a number of squares (value indicators) equal to the toggle's value.
-      for (let i = 0; i < square.value; i++) {
-        const squareIndicator = document.createElement('div');
-        squareIndicator.className = 'small-circle';
-        circlesContainer.appendChild(squareIndicator);
-      }
-      
-      // Build the column: toggle on top, then the vertical column of value indicators.
-      squareContainer.appendChild(toggleDiv);
-      squareContainer.appendChild(circlesContainer);
-      squaresRow.appendChild(squareContainer);
-    });
-    
-    // Toggle the active state on click and update the color of the associated indicators.
-    function toggleSquare(event) {
-      const index = event.currentTarget.dataset.index;
-      squaresData[index].active = !squaresData[index].active;
-      event.currentTarget.classList.toggle('active', squaresData[index].active);
-      
-      // Update the corresponding value indicators' colors.
-      const circlesContainer = event.currentTarget.nextElementSibling;
-      const color = squaresData[index].active ? 'green' : 'lightgrey';
-      circlesContainer.childNodes.forEach(indicator => {
-        indicator.style.backgroundColor = color;
-      });
-      
+    const plusButton = document.getElementById('plusButton');
+    const minusButton = document.getElementById('minusButton');
+
+    // Updates the entire UI.
+    function updateUI() {
+      renderBits();
       updateResult();
+      updateControlButtons();
     }
-    
-    // Update the result container with green squares equal to the sum of the active toggle values.
-    function updateResult() {
-      let total = 0;
-      squaresData.forEach(square => {
-        if (square.active) total += square.value;
-      });
-      
-      // Clear any previous result squares.
-      resultContainer.innerHTML = '';
-      
-      // Create a green square for each unit in the total.
-      for (let i = 0; i < total; i++) {
-        const resultSquare = document.createElement('div');
-        resultSquare.className = 'result-square';
-        resultContainer.appendChild(resultSquare);
+
+    // Renders the bit toggles with their value indicators.
+    function renderBits() {
+      squaresRow.innerHTML = '';
+      const n = bitsState.length;
+      // For each bit, calculate its value as 2^(n - 1 - i)
+      for (let i = 0; i < n; i++) {
+        const bitValue = Math.pow(2, n - 1 - i);
+        // Create a container for this bit column.
+        const bitColumn = document.createElement('div');
+        bitColumn.className = 'square-container';
+        
+        // Create the toggle circle.
+        const toggleDiv = document.createElement('div');
+        toggleDiv.className = 'toggle';
+        if (bitsState[i]) toggleDiv.classList.add('active');
+        toggleDiv.dataset.index = i;
+        toggleDiv.addEventListener('click', () => {
+          bitsState[i] = !bitsState[i];
+          updateUI();
+        });
+        
+        // Create a grid container for the indicator squares.
+        const indicatorsContainer = document.createElement('div');
+        indicatorsContainer.className = 'circles-container';
+        // Create a number of small squares equal to the bit's value.
+        for (let j = 0; j < bitValue; j++) {
+          const indicator = document.createElement('div');
+          indicator.className = 'small-circle';
+          indicator.style.backgroundColor = bitsState[i] ? 'green' : 'lightgrey';
+          indicatorsContainer.appendChild(indicator);
+        }
+        
+        bitColumn.appendChild(toggleDiv);
+        bitColumn.appendChild(indicatorsContainer);
+        squaresRow.appendChild(bitColumn);
       }
     }
+
+    // Updates the result container with green squares equal to the sum of the active bit values.
+    function updateResult() {
+      const n = bitsState.length;
+      let total = 0;
+      for (let i = 0; i < n; i++) {
+        const bitValue = Math.pow(2, n - 1 - i);
+        if (bitsState[i]) {
+          total += bitValue;
+        }
+      }
+      resultContainer.innerHTML = '';
+      for (let i = 0; i < total; i++) {
+        const resSquare = document.createElement('div');
+        resSquare.className = 'result-square';
+        resultContainer.appendChild(resSquare);
+      }
+    }
+
+    // Enable or disable the plus/minus buttons based on bit count limits.
+    function updateControlButtons() {
+      plusButton.disabled = bitsState.length >= 8;
+      minusButton.disabled = bitsState.length <= 1;
+    }
+
+    // Event listener for the plus button:
+    // Adds a new bit at the beginning (new most significant bit) if fewer than 8 bits.
+    plusButton.addEventListener('click', () => {
+      if (bitsState.length < 8) {
+        bitsState.unshift(false);
+        updateUI();
+      }
+    });
+
+    // Event listener for the minus button:
+    // Removes the leftmost bit if more than one bit exists.
+    minusButton.addEventListener('click', () => {
+      if (bitsState.length > 1) {
+        bitsState.shift();
+        updateUI();
+      }
+    });
+
+    // Initial UI update.
+    updateUI();
   </script>
 </body>
 </html>
