@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Binary Visualizer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin: 20px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    /* Row for the toggle circles */
+    .squares-row {
+      display: flex;
+      justify-content: space-evenly; /* Evenly space toggle circles */
+      margin-bottom: 20px;
+    }
+    /* Each toggle plus its vertical column of value indicators */
+    .square-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0 10px;
+    }
+    /* The toggle circle */
+    .toggle {
+      width: 60px;
+      height: 60px;
+      border: 2px solid black;
+      border-radius: 50%;
+      cursor: pointer;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    /* When active, fill the toggle with black */
+    .toggle.active {
+      background-color: black;
+    }
+    /* Container for the value indicators, arranged in a vertical column */
+    .circles-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    /* The small value indicators beneath each toggle are now squares */
+    .small-circle {
+      width: 15px;
+      height: 15px;
+      border-radius: 0;
+      background-color: lightgrey;
+    }
+    /* The result container is now arranged as a grid: no more than 8 squares in a row */
+    .result-container {
+      margin-top: 30px;
+      border: 2px dashed black;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(8, 15px);
+      gap: 5px;
+      justify-content: center;
+      min-height: 30px;
+    }
+    /* Each green counter square */
+    .result-square {
+      width: 15px;
+      height: 15px;
+      background-color: green;
+    }
+  </style>
+</head>
+<body>
+  <!-- Row of toggle circles arranged evenly -->
+  <div class="squares-row" id="squaresRow"></div>
+  <!-- Result container that holds green squares in a grid -->
+  <div class="result-container" id="resultContainer"></div>
+  
+  <script>
+    // Define the four toggle elements with their corresponding values.
+    // The leftmost element represents the highest value (8), and the rightmost the lowest (1).
+    const squaresData = [
+      { value: 8, active: false },
+      { value: 4, active: false },
+      { value: 2, active: false },
+      { value: 1, active: false }
+    ];
+    
+    const squaresRow = document.getElementById('squaresRow');
+    const resultContainer = document.getElementById('resultContainer');
+    
+    // Create a column group for each toggle and its value indicators.
+    squaresData.forEach((square, index) => {
+      const squareContainer = document.createElement('div');
+      squareContainer.className = 'square-container';
+      
+      // Create the toggle circle element.
+      const toggleDiv = document.createElement('div');
+      toggleDiv.className = 'toggle';
+      toggleDiv.dataset.index = index;
+      toggleDiv.addEventListener('click', toggleSquare);
+      
+      // Create a container for the value indicators, arranged in a vertical column.
+      const circlesContainer = document.createElement('div');
+      circlesContainer.className = 'circles-container';
+      
+      // Add a number of squares (value indicators) equal to the toggle's value.
+      for (let i = 0; i < square.value; i++) {
+        const squareIndicator = document.createElement('div');
+        squareIndicator.className = 'small-circle';
+        circlesContainer.appendChild(squareIndicator);
+      }
+      
+      // Build the column: toggle on top, then the vertical column of value indicators.
+      squareContainer.appendChild(toggleDiv);
+      squareContainer.appendChild(circlesContainer);
+      squaresRow.appendChild(squareContainer);
+    });
+    
+    // Toggle the active state on click and update the color of the associated indicators.
+    function toggleSquare(event) {
+      const index = event.currentTarget.dataset.index;
+      squaresData[index].active = !squaresData[index].active;
+      event.currentTarget.classList.toggle('active', squaresData[index].active);
+      
+      // Update the corresponding value indicators' colors.
+      const circlesContainer = event.currentTarget.nextElementSibling;
+      const color = squaresData[index].active ? 'green' : 'lightgrey';
+      circlesContainer.childNodes.forEach(indicator => {
+        indicator.style.backgroundColor = color;
+      });
+      
+      updateResult();
+    }
+    
+    // Update the result container with green squares equal to the sum of the active toggle values.
+    function updateResult() {
+      let total = 0;
+      squaresData.forEach(square => {
+        if (square.active) total += square.value;
+      });
+      
+      // Clear any previous result squares.
+      resultContainer.innerHTML = '';
+      
+      // Create a green square for each unit in the total.
+      for (let i = 0; i < total; i++) {
+        const resultSquare = document.createElement('div');
+        resultSquare.className = 'result-square';
+        resultContainer.appendChild(resultSquare);
+      }
+    }
+  </script>
+</body>
+</html>
