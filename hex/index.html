@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hexadecimal Counting in 3D (ES Modules)</title>
+  <style>
+    :root {
+      /* Adjust the spacing between the digit groups */
+      --place-spacing: 30; 
+      /* Use this value as the full spacing (offset) between successive 16x16 grid blocks */
+      --grid-spacing: 1; 
+    }
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    /* The canvas container fills the window */
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    /* Control panel overlaid on top */
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      z-index: 100;
+    }
+    .controls > div {
+      margin: 5px 0;
+    }
+    .controls button {
+      font-size: 14px;
+      padding: 3px 8px;
+      margin: 0 3px;
+    }
+  </style>
+  <!-- Import Map for ES Modules -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@v0.149.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@v0.149.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Container for the 3D canvas -->
+  <div id="canvas-container"></div>
+  
+  <!-- Control Panel -->
+  <div class="controls">
+    <div>
+      <strong>Ones (1’s):</strong>
+      <button onclick="updateDepot('ones', -1)">-</button>
+      <span id="onesCount">0</span>
+      <button onclick="updateDepot('ones', 1)">+</button>
+    </div>
+    <div>
+      <strong>Lines (16’s):</strong>
+      <button onclick="updateDepot('line', -1)">-</button>
+      <span id="lineCount">0</span>
+      <button onclick="updateDepot('line', 1)">+</button>
+    </div>
+    <div>
+      <strong>Grids (256’s):</strong>
+      <button onclick="updateDepot('grid', -1)">-</button>
+      <span id="gridCount">0</span>
+      <button onclick="updateDepot('grid', 1)">+</button>
+    </div>
+    <div>
+      <button onclick="incrementTotal()">Next</button>
+      <button onclick="resetTotal()">Reset</button>
+    </div>
+    <div id="totalDisplay">
+      Total (Dec): 0 <br> Total (Hex): 000
+    </div>
+  </div>
+  
+  <!-- Module-based Script -->
+  <script type="module">
+    import * as THREE from "three";
+    
+    // Global state (each depot ranges 0–15)
+    const state = {
+      ones: 0,   // ones: each cube counts as 1
+      line: 0,   // line: each full row of 16 cubes counts as 16
+      grid: 0    // grid: each full 16×16 grid counts as 256
+    };
+    let totalCounter = 0; // For auto-increment
+
+    // Cube and gap size
+    const cubeSize = 1;
+    const gap = 0.2;
+
+    // Read CSS variables for spacing
+    const computedStyle = getComputedStyle(document.documentElement);
+    const PLACE_SPACING = parseFloat(computedStyle.getPropertyValue("--place-spacing")) || 20;
+    const GRID_DEPTH_SPACING = parseFloat(computedStyle.getPropertyValue("--grid-spacing")) || 0.5;
+
+    // Create scene, camera, and renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+    // Position the camera at an angle to see all depots
+    camera.position.set(50, 40, 60);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
+    
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+    
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(30, 50, 50);
+    scene.add(directionalLight);
+    
+    // Create groups for the depots and position them close together:
+    const onesGroup = new THREE.Group();
+    const linesGroup = new THREE.Group();
+    const gridsGroup = new THREE.Group();
+    onesGroup.position.set(-PLACE_SPACING, 0, 0);
+    linesGroup.position.set(0, 0, 0);
+    gridsGroup.position.set(PLACE_SPACING, 0, 0);
+    scene.add(onesGroup);
+    scene.add(linesGroup);
+    scene.add(gridsGroup);
+    
+    // Cache geometry and materials
+    const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+    const onesMaterial = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+    const linesMaterial = new THREE.MeshLambertMaterial({ color: 0xff9800 });
+    const gridsMaterial = new THREE.MeshLambertMaterial({ color: 0x2196f3 });
+    
+    // Update the Ones depot: horizontal row along the X-axis.
+    function updateOnesGroup() {
+      while (onesGroup.children.length) {
+        onesGroup.remove(onesGroup.children[0]);
+      }
+      // Lay out state.ones cubes horizontally
+      for (let i = 0; i < state.ones; i++) {
+        const cube = new THREE.Mesh(cubeGeometry, onesMaterial);
+        cube.position.set(i * (cubeSize + gap), 0, 0);
+        onesGroup.add(cube);
+      }
+    }
+    
+    // Update the Lines depot: each increment adds a full row of 16 cubes.
+    function updateLinesGroup() {
+      while (linesGroup.children.length) {
+        linesGroup.remove(linesGroup.children[0]);
+      }
+      // For each full row in state.line (max 15 rows)
+      for (let row = 0; row < state.line; row++) {
+        for (let col = 0; col < 16; col++) {
+          const cube = new THREE.Mesh(cubeGeometry, linesMaterial);
+          const rowWidth = 16 * (cubeSize + gap) - gap;
+          const xPos = col * (cubeSize + gap) - rowWidth / 2 + (cubeSize + gap) / 2;
+          const yPos = row * (cubeSize + gap);
+          cube.position.set(xPos, yPos, 0);
+          linesGroup.add(cube);
+        }
+      }
+    }
+    
+    // Update the Grids depot: each increment adds a full 16×16 grid. Grids stack along Z.
+    function updateGridsGroup() {
+      while (gridsGroup.children.length) {
+        gridsGroup.remove(gridsGroup.children[0]);
+      }
+      const numGrids = state.grid; // 0–15 grids
+      const cellsPerRow = 16, cellsPerCol = 16;
+      const gridWidth = cellsPerRow * (cubeSize + gap) - gap;
+      const gridHeight = cellsPerCol * (cubeSize + gap) - gap;
+      
+      for (let g = 0; g < numGrids; g++) {
+        const gridBlock = new THREE.Group();
+        for (let row = 0; row < cellsPerCol; row++) {
+          for (let col = 0; col < cellsPerRow; col++) {
+            const cube = new THREE.Mesh(cubeGeometry, gridsMaterial);
+            const xPos = col * (cubeSize + gap) - gridWidth / 2 + (cubeSize + gap) / 2;
+            const yPos = row * (cubeSize + gap) - gridHeight / 2 + (cubeSize + gap) / 2;
+            cube.position.set(xPos, yPos, 0);
+            gridBlock.add(cube);
+          }
+        }
+        // Shift the grid block back so that its front face is flush with the others.
+        gridBlock.position.z = -cubeSize / 2 + g * GRID_DEPTH_SPACING;
+        gridsGroup.add(gridBlock);
+      }
+    }
+    
+    // Update the total value display and the counts in the control panel using hexadecimal digits.
+    function updateTotalDisplay() {
+      const total = state.ones + state.line * 16 + state.grid * 256;
+      const hexString = total.toString(16).toUpperCase().padStart(3, '0');
+      document.getElementById('totalDisplay').innerHTML =
+        `Total (Dec): ${total}<br>Total (Hex): ${hexString}`;
+      document.getElementById('onesCount').innerText = state.ones.toString(16).toUpperCase();
+      document.getElementById('lineCount').innerText = state.line.toString(16).toUpperCase();
+      document.getElementById('gridCount').innerText = state.grid.toString(16).toUpperCase();
+    }
+    
+    // Refresh all depots and update the display.
+    function updateScene() {
+      updateOnesGroup();
+      updateLinesGroup();
+      updateGridsGroup();
+      updateTotalDisplay();
+    }
+    
+    // Change a depot’s value by delta (constrained to 0–15).
+    function updateDepot(depot, delta) {
+      state[depot] = Math.min(15, Math.max(0, state[depot] + delta));
+      totalCounter = state.ones + state.line * 16 + state.grid * 256;
+      updateScene();
+    }
+    
+    // Auto-increment: cycle overall total (0–FFF) and decompose into depot values.
+    function incrementTotal() {
+      totalCounter = (totalCounter + 1) % 4096; // Cycle 0 to 4095
+      state.grid = Math.floor(totalCounter / 256);
+      let remainder = totalCounter % 256;
+      state.line = Math.floor(remainder / 16);
+      state.ones = remainder % 16;
+      updateScene();
+    }
+    
+    // Reset depots and auto-increment counter.
+    function resetTotal() {
+      totalCounter = 0;
+      state.ones = 0;
+      state.line = 0;
+      state.grid = 0;
+      updateScene();
+    }
+    
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    
+    // Resize listener to adjust camera and renderer.
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    
+    // Initialize the scene and start the animation loop.
+    updateScene();
+    animate();
+    
+    // Expose functions to the global scope so the HTML control panel can access them.
+    window.updateDepot = updateDepot;
+    window.incrementTotal = incrementTotal;
+    window.resetTotal = resetTotal;
+  </script>
+</body>
+</html>
