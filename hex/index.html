@@ -2,35 +2,71 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Hexadecimal 3D Stack Explorer w/ 4096’s Shell</title>
+  <title>n‑ary 3D Stack Explorer</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #111; color: #eee; font-family: sans-serif; }
-    #controls { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap:1em; z-index:10;
-                 background: rgba(0,0,0,0.5); padding: .5em 1em; border-radius: 8px; }
-    .digit-control { display: flex; align-items: center; }
-    .digit-control button { width:1.5em; height:1.5em; font-size:1em; background:#333; color:#eee;
-                             border:1px solid #555; border-radius:4px; cursor:pointer; }
-    .digit-control input { width:2em; text-align:center; margin:0 .3em; background:#222; color:#0f0;
-                            border:1px solid #555; border-radius:4px; font-size:1em; }
-    .digit-control label { margin-left:.3em; font-size:.9em; }
-    #container { width:100vw; height:100vh; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      color: #eee;
+      font-family: sans-serif;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 1em;
+      z-index: 10;
+      background: rgba(0,0,0,0.5);
+      padding: 0.5em 1em;
+      border-radius: 8px;
+    }
+    .digit-control {
+      display: flex;
+      align-items: center;
+    }
+    .digit-control button {
+      width: 1.5em;
+      height: 1.5em;
+      font-size: 1em;
+      background: #333;
+      color: #eee;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .digit-control input {
+      width: 2.5em;
+      text-align: center;
+      margin: 0 0.3em;
+      background: #222;
+      color: #0f0;
+      border: 1px solid #555;
+      border-radius: 4px;
+      font-size: 1em;
+    }
+    .digit-control label {
+      margin-left: 0.3em;
+      font-size: 0.9em;
+    }
+    #container {
+      width: 100vw;
+      height: 100vh;
+    }
   </style>
 </head>
 <body>
 
-  <div id="controls">
-    <div class="digit-control"><button id="dec3">–</button><input id="digit3" type="text" value="0" readonly><button id="inc3">+</button><label>4096’s</label></div>
-    <div class="digit-control"><button id="dec2">–</button><input id="digit2" type="text" value="0" readonly><button id="inc2">+</button><label>256’s</label></div>
-    <div class="digit-control"><button id="dec1">–</button><input id="digit1" type="text" value="0" readonly><button id="inc1">+</button><label>16’s</label></div>
-    <div class="digit-control"><button id="dec0">–</button><input id="digit0" type="text" value="0" readonly><button id="inc0">+</button><label>1’s</label></div>
-  </div>
-
+  <div id="controls"></div>
   <div id="container"></div>
 
+  <!-- importmap for ES modules -->
   <script type="importmap">
   {
     "imports": {
-      "three":   "https://cdn.jsdelivr.net/npm/three@v0.149.0/build/three.module.js",
+      "three": "https://cdn.jsdelivr.net/npm/three@v0.149.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@v0.149.0/examples/jsm/"
     }
   }
@@ -40,12 +76,12 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // scene + camera + renderer
+    // —— SCENE SETUP ——
     const container = document.getElementById('container');
     const scene     = new THREE.Scene();
     scene.background = new THREE.Color(0x111111);
 
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 2000);
     camera.position.set(30, 30, 40);
     camera.lookAt(0, 0, 0);
 
@@ -53,7 +89,6 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     container.appendChild(renderer.domElement);
 
-    // orbit controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
@@ -64,95 +99,166 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // lighting
     scene.add(new THREE.AmbientLight(0xffffff, 0.4));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    dirLight.position.set(10,20,10);
+    dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
-    // common geometry & materials
-    const cubeSize = 0.9, spacing = 1;
-    const geom = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-    const mat1    = new THREE.MeshLambertMaterial({ color: 0xff4444 });
-    const mat16   = new THREE.MeshLambertMaterial({ color: 0x44ff44 });
-    const mat256  = new THREE.MeshLambertMaterial({ color: 0x4444ff });
-    const mat4096 = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+    // —— DATA & HELPERS ——
+    let base = 16;
+    const digits      = [0, 0, 0, 0];         // place‑values base⁰…base³
+    const DIGIT_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/';
+    const colors      = [0xff4444, 0x44ff44, 0x4444ff, 0xffff00];  // p=0→red,1→green,2→blue,3→yellow
+    const groups      = [];
+    const geom        = new THREE.BoxGeometry(0.9, 0.9, 0.9);
 
-    // groups
-    const group1    = new THREE.Group(),
-          group16   = new THREE.Group(),
-          group256  = new THREE.Group(),
-          group4096 = new THREE.Group();
-    scene.add(group1, group16, group256, group4096);
-
-    // UI state
-    const digits = [0,0,0,0];
-    const txts = [
-      document.getElementById('digit0'),
-      document.getElementById('digit1'),
-      document.getElementById('digit2'),
-      document.getElementById('digit3')
-    ];
-    function setDisplay(i) { txts[i].value = digits[i].toString(16).toUpperCase(); }
+    // create four groups (we’ll reuse them)
     for (let i = 0; i < 4; i++) {
-      document.getElementById(`inc${i}`).onclick = () => { if (digits[i]<15) digits[i]++; setDisplay(i); draw(); };
-      document.getElementById(`dec${i}`).onclick = () => { if (digits[i]>0) digits[i]--; setDisplay(i); draw(); };
-      setDisplay(i);
+      const g = new THREE.Group();
+      groups.push(g);
+      scene.add(g);
     }
 
-    // draw stacks
-    function draw() {
-      group1.clear(); group16.clear(); group256.clear(); group4096.clear();
-      const [ones, sixteens, hundreds, thousands] = digits;
+    function digitLabel(p) {
+      if (p === 0) return `1’s`;
+      if (p === 1) return `${base}’s`;
+      if (p === 2) return `${base}\u00B2’s`;
+      return     `${base}\u00B3’s`;
+    }
 
-      // 1’s (red)
-      for (let i = 0; i < ones; i++) {
-        const m = new THREE.Mesh(geom, mat1);
-        m.position.set(i*spacing, 0, 0);
-        group1.add(m);
+    function buildControls() {
+      const ctrl = document.getElementById('controls');
+      ctrl.innerHTML = '';
+
+      // Base selector
+      const lblBase = document.createElement('label');
+      lblBase.textContent = 'Base:';
+      lblBase.style.marginRight = '0.3em';
+      ctrl.appendChild(lblBase);
+
+      const selBase = document.createElement('select');
+      selBase.id = 'base-select';
+      for (let b = 2; b <= 64; b++) {
+        const o = document.createElement('option');
+        o.value = b; o.textContent = b;
+        if (b === base) o.selected = true;
+        selBase.appendChild(o);
+      }
+      ctrl.appendChild(selBase);
+
+      selBase.addEventListener('change', () => {
+        base = +selBase.value;
+        digits.fill(0);
+        // refresh labels only
+        document.querySelectorAll('.digit-control label')
+                .forEach((el, i) => el.textContent = digitLabel(i));
+        updateDisplays();
+        draw();
+      });
+
+      // Digit controls
+      for (let p = 0; p < 4; p++) {
+        const dc = document.createElement('div');
+        dc.className = 'digit-control';
+
+        const btnDec = document.createElement('button');
+        btnDec.textContent = '–';
+        btnDec.onclick = () => {
+          if (digits[p] > 0) digits[p]--;
+          updateDisplays(); draw();
+        };
+        dc.appendChild(btnDec);
+
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id   = `digit${p}`;
+        inp.readOnly = true;
+        dc.appendChild(inp);
+
+        const btnInc = document.createElement('button');
+        btnInc.textContent = '+';
+        btnInc.onclick = () => {
+          if (digits[p] < base - 1) digits[p]++;
+          updateDisplays(); draw();
+        };
+        dc.appendChild(btnInc);
+
+        const lbl = document.createElement('label');
+        lbl.textContent = digitLabel(p);
+        dc.appendChild(lbl);
+
+        ctrl.appendChild(dc);
       }
 
-      // 16’s (green)
-      for (let r = 0; r < sixteens; r++) {
-        for (let i = 0; i < 16; i++) {
-          const m = new THREE.Mesh(geom, mat16);
-          m.position.set(i*spacing, r*spacing, -spacing);
-          group16.add(m);
+      updateDisplays();
+    }
+
+    function updateDisplays() {
+      for (let p = 0; p < 4; p++) {
+        const el = document.getElementById(`digit${p}`);
+        el.value = DIGIT_CHARS[digits[p]];
+      }
+    }
+
+    // —— DRAWING LOGIC ——  
+    function draw() {
+      // clear all groups
+      groups.forEach(g => g.clear());
+
+      const [d0, d1, d2, d3] = digits;
+      const s = 1;      // spacing = cubeSize + gap ≈1
+
+      // base⁰ → along X
+      for (let i = 0; i < d0; i++) {
+        const m = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ color: colors[0] }));
+        m.position.set(i * s, 0, 0);
+        groups[0].add(m);
+      }
+
+      // base¹ → rows of length base stacking along Y at z=-1
+      for (let r = 0; r < d1; r++) {
+        for (let i = 0; i < base; i++) {
+          const m = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ color: colors[1] }));
+          m.position.set(i * s, r * s, -1 * s);
+          groups[1].add(m);
         }
       }
 
-      // 256’s (blue)
-      for (let b = 0; b < hundreds; b++) {
-        for (let r = 0; r < 16; r++) {
-          for (let i = 0; i < 16; i++) {
-            const m = new THREE.Mesh(geom, mat256);
-            m.position.set(i*spacing, r*spacing, -(2 + b)*spacing);
-            group256.add(m);
+      // base² → base×base grids stacking along Z at z=-(2+layer)
+      for (let layer = 0; layer < d2; layer++) {
+        for (let y = 0; y < base; y++) {
+          for (let x = 0; x < base; x++) {
+            const m = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ color: colors[2] }));
+            m.position.set(x * s, y * s, -(2 + layer) * s);
+            groups[2].add(m);
           }
         }
       }
 
-      // 4096’s shell only (yellow), front face at z = -17*spacing
-      for (let block = 0; block < thousands; block++) {
-        for (let z = 0; z < 16; z++) {
-          for (let y = 0; y < 16; y++) {
-            for (let x = 0; x < 16; x++) {
-              if (x>0 && x<15 && y>0 && y<15 && z>0 && z<15) continue; // skip interior
-              const m = new THREE.Mesh(geom, mat4096);
+      // base³ → outer‐shell of each base³ block, stacking along Y, offset behind at z=-(base+1+z)
+      for (let block = 0; block < d3; block++) {
+        for (let z = 0; z < base; z++) {
+          for (let y = 0; y < base; y++) {
+            for (let x = 0; x < base; x++) {
+              // skip fully interior cubes
+              if (x > 0 && x < base-1 && y > 0 && y < base-1 && z > 0 && z < base-1) continue;
+              const m = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ color: colors[3] }));
               m.position.set(
-                x*spacing,
-                (block*16 + y)*spacing,
-                -(17 + z)*spacing    // ← pushed back behind 15 grids
+                x * s,
+                (block * base + y) * s,
+                -(base + 1 + z) * s
               );
-              group4096.add(m);
+              groups[3].add(m);
             }
           }
         }
       }
     }
+
+    // —— BOOTSTRAP ——
+    buildControls();
     draw();
 
-    // render loop
     (function animate() {
       requestAnimationFrame(animate);
       controls.update();
